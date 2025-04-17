@@ -111,7 +111,7 @@ def init_page():
         st.markdown(
             """
             <h1 style='text-align: center;'>
-                Frontend de Caycho
+                Planificador de Específicas
             </h1>
             """,
             unsafe_allow_html=True
@@ -146,6 +146,7 @@ def sidebar():
             "🚀 EJECUTAR", 
             key="run",
             type="primary",  # Botón destacado en Streamlit >= 1.27
+            disabled=True,
             use_container_width=True
         ):
             st.sidebar.success("Proceso ejecutado!")
@@ -153,7 +154,7 @@ def sidebar():
         st.markdown("---")
         # --- Botón principal (destacado) ---
         if st.button(
-            "⚡ Actualizar", 
+            "⚡ COMPROBAR", 
             key="actualizar",
             use_container_width=True
         ):
@@ -188,29 +189,6 @@ def sidebar():
             st.session_state.post_status_code = None
             st.session_state.post_status_text = None
         
-
-
-
-def especifica_buttons():
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(
-            "🗑️ Eliminar Específica", 
-            key="especifica_delete",
-            use_container_width=True
-        ):
-            #st.session_state.especifica_delete_flag = True
-            #print(st.session_state.df_tickets)
-            delete_especifica()
-
-    with col2:
-        if st.button(
-            "✏️ Cambiar Específica", 
-            key="especifica_change",
-            use_container_width=True
-        ):
-                st.info("Cambiando Específica..")
-
 def get_json_from_api():
     try:
         url = API_BASE + str(st.session_state.line)
@@ -235,6 +213,18 @@ def set_dfs():
     df_tickets = df_tickets.rename(columns={"ORDEN_COSTURA" : "Orden de Costura", "PAQUETE" : "Paquete", "ESPECIFICA" : "Específica", "ESTILO_NETTALCO" : "Estilo Nettalco", "ESTILO_CLIENTE" : "Estilo Cliente", "TARIFADO" : "Tarifado", "FECHA_DESPACHO" : "Fecha de Despacho"})
     df_tickets = df_tickets[["Orden de Costura", "Paquete", "Específica", "Estilo Nettalco", "Estilo Cliente", "Tarifado", "Fecha de Despacho", "activo"]]
     st.session_state.df_tickets = df_tickets
+    st.session_state.df_ticket_especificas = st.session_state.json_data["ticket_especificas"]
+
+    errors = st.session_state.json_data["errores"]
+    df_especificas_fuera_tarifado = pd.DataFrame(errors["especificas_fuera_tarifado"])
+    #df_especificas_fuera_tarifado = df_especificas_fuera_tarifado.rename(columns={"ORDEN_COSTURA" : "Orden de Costura", "PAQUETE" : "Paquete", "ESPECIFICA" : "Específica", "ESTILO_NETTALCO" : "Estilo Nettalco", "ESTILO_CLIENTE" : "Estilo Cliente", "TARIFADO" : "Tarifado", "FECHA_DESPACHO" : "Fecha de Despacho"})
+    #df_especificas_fuera_tarifado = df_especificas_fuera_tarifado[["Orden de Costura", "Paquete", "Específica", "Estilo Nettalco", "Estilo Cliente", "Tarifado", "Fecha de Despacho", "activo"]]
+    st.session_state.df_especificas_fuera_tarifado = df_especificas_fuera_tarifado
+
+    df_especificas_sin_operario = pd.DataFrame(errors["especificas_sin_operario"])
+    #df_especificas_sin_operario = df_especificas_sin_operario.rename(columns={"ORDEN_COSTURA" : "Orden de Costura", "PAQUETE" : "Paquete", "ESPECIFICA" : "Específica", "ESTILO_NETTALCO" : "Estilo Nettalco", "ESTILO_CLIENTE" : "Estilo Cliente", "TARIFADO" : "Tarifado", "FECHA_DESPACHO" : "Fecha de Despacho"})
+    #df_especificas_sin_operario = df_especificas_sin_operario[["Orden de Costura", "Paquete", "Específica", "Estilo Nettalco", "Estilo Cliente", "Tarifado", "Fecha de Despacho", "activo"]]
+    st.session_state.df_especificas_sin_operario = df_especificas_sin_operario
 
     df_ordenes_costura = pd.DataFrame(st.session_state.json_data["ordenes_costura"]).T
     df_ordenes_costura = df_ordenes_costura.rename(columns={"id_orden_costura" : "Id", "id_estilo_nettalco" : "Estilo Nettalco", "fecha_despacho" : "Fecha de Despacho", "prioridad" : "Prioridad", "tiempo_estandar" : "Tiempo Estándar"})
@@ -268,7 +258,7 @@ def set_dfs():
 
     df_especificas = pd.DataFrame(st.session_state.json_data["especificas"]).T
     df_especificas = df_especificas.rename(columns={"id_especifica" : "Id", "descripcion" : "Descripción", "tiempo_estandar" : "Tiempo Estándar"})
-    df_especificas = df_especificas[["Id", "Descripción", "Tiempo Estándar", "activo"]]
+    df_especificas = df_especificas[["Id", "Descripción", "Tiempo Estándar"]]
     st.session_state.df_especificas = df_especificas
 
     df_operador_especifica = pd.DataFrame(st.session_state.json_data["operador_especifica"])
@@ -309,10 +299,57 @@ def delete_by_api_operator_especifica(url, rows_to_delete):
     # st.rerun()
 
 @st.dialog("Eliminar Específica")
-def delete_especifica():
-    id_especifica = st.text_input("Id Específica")
-    if st.button("Submit"):
-        st.session_state.df_tickets.loc[st.session_state.df_tickets["Específica"] == id_especifica, "activo"] = False
+def delete_especifica(line):
+    id_especificas = st.session_state.df_tickets["Específica"].unique()
+    #id_especificas = [item["id_especifica"] for item in st.session_state.df_ticket_especificas]
+    id_especifica = st.selectbox("Específica", id_especificas)
+    if st.button("Eliminar"):
+        TICKETS_API_DELETE = API_BASE + str(line) + "/tickets/especificas/eliminar/"
+        changed_rows_especifica_delete = st.session_state.df_tickets.loc[st.session_state.df_tickets["Específica"] == id_especifica]
+        ids_especifica_delete = changed_rows_especifica_delete["Específica"].tolist()
+        actives_especifica_delete = changed_rows_especifica_delete["activo"].tolist()
+        update_active(TICKETS_API_DELETE, ids_especifica_delete, actives_especifica_delete)
+        print(changed_rows_especifica_delete)
+        st.rerun()
+
+@st.dialog("Cambiar Específica de Ticket")
+def change_especifica_ticket(line):
+    id_especificas = st.session_state.df_tickets["Específica"].unique()
+    old_especifica = st.selectbox("Específica", id_especificas)
+    active_especificas = st.session_state.df_especificas["Id"].tolist()
+    new_especifica = st.selectbox("Nueva Específica", active_especificas)
+    if st.button("Cambiar"):
+        TICKETS_API_UPDATE = API_BASE + str(line) + "/tickets/especificas/cambiar/"
+        changed_rows_especifica_update = st.session_state.df_tickets.loc[st.session_state.df_tickets["Específica"] == old_especifica]
+        ids_especifica_update = changed_rows_especifica_update["Específica"].tolist()
+        update_especifica_ticket(TICKETS_API_UPDATE, ids_especifica_update, new_especifica)
+        st.rerun()
+
+@st.dialog("Cambiar Específica")
+def change_especifica(line):
+    id_especificas = st.session_state.df_especificas["Id"].unique()
+    old_especifica = st.selectbox("Específica", id_especificas)
+    new_id_especifica = st.text_input("Id de Esepcífica")
+    new_description = st.text_input("Descripción")
+    new_estandar_time = st.text_input("Tiempo Estándar")
+    if st.button("Cambiar"):
+        ESPECIFICAS_API_UPDATE = API_BASE + str(line) + "/especificas/"
+        changed_especifica_update = st.session_state.df_especificas.loc[st.session_state.df_especificas["Id"] == old_especifica]
+        ids_especifica_update = changed_especifica_update["Id"].tolist()[0]
+        update_especifica(ESPECIFICAS_API_UPDATE, ids_especifica_update, new_id_especifica, new_description, new_estandar_time)
+        st.rerun()
+
+@st.dialog("Recuperar Específica")
+def recovery_especifica(line):
+    id_especificas = st.session_state.df_tickets.loc[st.session_state.df_tickets["activo"] == False, "Específica"].unique()
+    id_especifica = st.selectbox("Específica", id_especificas)
+    if st.button("Recuperar"):
+        TICKETS_API_UPDATE = API_BASE + str(line) + "/tickets/especificas/agregar/"
+        changed_rows_especifica_delete = st.session_state.df_tickets.loc[st.session_state.df_tickets["Específica"] == id_especifica]
+        ids_especifica_delete = changed_rows_especifica_delete["Específica"].tolist()
+        actives_especifica_delete = changed_rows_especifica_delete["activo"].tolist()
+        update_active(TICKETS_API_UPDATE, ids_especifica_delete, actives_especifica_delete)
+        print(changed_rows_especifica_delete)
         st.rerun()
 
 def post_by_api(url, data):
@@ -336,8 +373,10 @@ def add_operator(url_api):
 
 @st.dialog("Agregar Operador - Especifica")
 def add_operator_especifica(url_api):
-    id_especifica = st.text_input("Id Específica")
-    id_operador = (st.text_input("Id Operador")).upper()
+    active_operators = st.session_state.df_operadores[st.session_state.df_operadores["activo"] == True]["Id"].tolist()
+    id_operador = st.selectbox("Id Operador", active_operators)
+    active_especificas = st.session_state.df_especificas["Id"].tolist()
+    id_especifica = st.selectbox("Id Especifica", active_especificas)
     eficiencia = st.text_input("Eficiencia")
     if eficiencia != "":
         eficiencia = float(eficiencia)
@@ -345,6 +384,112 @@ def add_operator_especifica(url_api):
         new_operator_especifica = {"id_especifica": id_especifica, "id_operador": id_operador, "eficiencia": eficiencia}
         post_by_api(url_api, new_operator_especifica)
         st.rerun()
+
+def update_especifica_ticket(url, old_especificas_list, new_especifica):
+    if old_especificas_list:
+        for old_especifica in old_especificas_list:
+            update_url = url + str(old_especifica)
+            payload = {
+                "id_especifica": new_especifica
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            response = requests.put(update_url, data=json.dumps(payload), headers=headers)
+            st.session_state.post_status_code = response.status_code
+            st.session_state.post_status_text = response.json()
+    st.rerun()
+
+def update_especifica(url, old_id, new_id, new_description, new_estandar_time):
+    if old_id:
+        update_url = url + str(old_id)
+        payload = {
+            "descripcion": new_id,
+            "id_especifica": new_description,
+            "tiempo_estandar": float(new_estandar_time),
+            "activo": True
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        response = requests.put(update_url, data=json.dumps(payload), headers=headers)
+        st.session_state.post_status_code = response.status_code
+        st.session_state.post_status_text = response.json()
+    st.rerun()
+
+def update_active(url, ids_list, activates_list):
+    print(ids_list)
+    if ids_list and activates_list:
+        for i in range (0, len(ids_list)):
+            print("-------- ", i)
+            id = ids_list[i]
+            activate = activates_list[i]
+            update_url = url + str(id)
+            print("id: ", id, " activate: ", activate)
+            payload = {
+                "activo": activate
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            response = requests.put(update_url, data=json.dumps(payload), headers=headers)
+            st.session_state.post_status_code = response.status_code
+            st.session_state.post_status_text = response.json()
+    st.rerun()
+
+def update_active_op_esp(url, ops_ids, esps_ids, eficiencia, activates_list):
+    print(ops_ids)
+    if ops_ids and esps_ids and activates_list:
+        for i in range (0, len(ops_ids)):
+            print("-------- ", i)
+            operador_id = ops_ids[i]
+            especifica_id = esps_ids[i]
+            activate = activates_list[i]
+            update_url = url + str(operador_id) + "/" + str(especifica_id)
+            payload = {
+                "eficiencia": eficiencia[i],
+                "activo": activate
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            response = requests.put(update_url, data=json.dumps(payload), headers=headers)
+            st.session_state.post_status_code = response.status_code
+            st.session_state.post_status_text = response.json()
+    st.rerun()
+
+def especifica_buttons(line):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button(
+            "🗑️ Eliminar Específica", 
+            key="especifica_delete",
+            use_container_width=True
+        ):
+            delete_especifica(line)
+
+    with col2:
+        if st.button(
+            "✏️ Cambiar Específica", 
+            key="especifica_change",
+            use_container_width=True
+        ):
+            change_especifica_ticket(line)
+
+    with col3:
+        if st.button(
+            "♻️ Recuperar Específica", 
+            key="especifica_recovery",
+            use_container_width=True
+        ):
+            recovery_especifica(line)
+
+def write_history():
+    print("guardado")
 
 def show_tables(line):
     HEIGHT_TABLE = 250
@@ -359,6 +504,28 @@ def show_tables(line):
     st.dataframe(st.session_state.df_tickets, hide_index=False, use_container_width=True)
 
     #Aqui falta poner lo de los errores
+    col1, col2 = st.columns([5, 8])
+    with col1:
+        st.markdown(
+            """
+            <h3 style='text-align: center; color: salmon;'>
+                Especificas Fuera del Tarifado
+            </h3>
+            """,
+            unsafe_allow_html=True
+        )
+        st.dataframe(st.session_state.df_especificas_fuera_tarifado, hide_index=True, use_container_width=True)
+    
+    with col2:
+        st.markdown(
+            """
+            <h3 style='text-align: center; color: salmon;'>
+                Especificas Sin Operario
+            </h3>
+            """,
+            unsafe_allow_html=True
+        )
+        st.dataframe(st.session_state.df_especificas_sin_operario, hide_index=True, use_container_width=True)
 
     st.divider()
 
@@ -376,16 +543,18 @@ def show_tables(line):
                 unsafe_allow_html=True
             )
         with subcol2:
-            if st.button("🔄", help="Eliminar Órdenes de Costura Seleccionadas"):
+            if st.button("🔄", help="Refrescar Órdenes de Costura Seleccionadas"):
                 flag_delete_ordenes_costura = True
             
         #st.session_state.df_ordenes_costura['Eliminar'] = False
         edited_df_ordenes_costura = st.data_editor(st.session_state.df_ordenes_costura, hide_index=True, use_container_width=True, height=HEIGHT_TABLE, disabled=["Id", "Estilo Nettalco", "Fecha de Despacho", "Prioridad", "Tiempo Estándar"])
 
         if flag_delete_ordenes_costura:
-            ORDENES_COSTURA_API_DELETE = API_BASE + str(line) + "/ordenes_costura/"
-            #rows_to_delete_ordenes_costura = edited_df_ordenes_costura[edited_df_ordenes_costura["Eliminar"] == True]["Id"].tolist()
-            #delete_by_api(ORDENES_COSTURA_API_DELETE, rows_to_delete_ordenes_costura)
+            ORDENES_COSTURA_API_UPDATE = API_BASE + str(line) + "/ordenes_costura/"
+            changed_rows_ordenes_costura = edited_df_ordenes_costura[edited_df_ordenes_costura["activo"] != st.session_state.df_ordenes_costura["activo"]]
+            ids_ordenes_costura = changed_rows_ordenes_costura["Id"].tolist()
+            actives_ordenes_costura = changed_rows_ordenes_costura["activo"].tolist()
+            update_active(ORDENES_COSTURA_API_UPDATE, ids_ordenes_costura, actives_ordenes_costura)
 
     with col2:
         subcol1, subcol2 = st.columns([4, 1])
@@ -400,16 +569,19 @@ def show_tables(line):
                 unsafe_allow_html=True
             )
         with subcol2:
-            if st.button("🔄", help="Eliminar Estilos Nettalco Seleccionadas"):
+            if st.button("🔄", help="Refrescar Estilos Nettalco Seleccionadas"):
                 flag_delete_estilos_nettalco = True
             
         #st.session_state.df_estilos_nettalco['Eliminar'] = False
         edited_df_estilos_nettalco = st.data_editor(st.session_state.df_estilos_nettalco, hide_index=True, use_container_width=True, height=HEIGHT_TABLE, disabled=["Id", "Tarifado", "Estilo Cliente"])
 
         if flag_delete_estilos_nettalco:
-            ESTILOS_NETTALCO_API_DELETE = API_BASE + str(line) + "/estilos_nettalco/"
-            #rows_to_delete_estilos_nettalco = edited_df_estilos_nettalco[edited_df_estilos_nettalco["Eliminar"] == True]["Id"].tolist()
-            #delete_by_api(ESTILOS_NETTALCO_API_DELETE, rows_to_delete_estilos_nettalco)
+            ESTILOS_NETTALCO_API_UPDATE = API_BASE + str(line) + "/estilos_nettalco/"
+            changed_rows_estilos_nettalco = edited_df_estilos_nettalco[edited_df_estilos_nettalco["activo"] != st.session_state.df_estilos_nettalco["activo"]]
+            ids_estilos_nettalco = changed_rows_estilos_nettalco["Id"].tolist()
+            actives_estilos_nettalco = changed_rows_estilos_nettalco["activo"].tolist()
+            update_active(ESTILOS_NETTALCO_API_UPDATE, ids_estilos_nettalco, actives_estilos_nettalco)
+
     
     col1, col2, col3 = st.columns([5, 4, 2])
     with col1:
@@ -430,7 +602,7 @@ def show_tables(line):
                 add_operator(OPERATORS_API_POST)
 
         with subcol3:   
-            if st.button("🔄", help="Eliminar Operadores Seleccionados"):
+            if st.button("🔄", help="Refrescar Operadores Seleccionados"):
                 flag_delete = True
             
 
@@ -438,9 +610,11 @@ def show_tables(line):
         edited_df = st.data_editor(st.session_state.df_operadores, hide_index=True, use_container_width=True, height=HEIGHT_TABLE)
 
         if flag_delete:
-            OPERATORS_API_DELETE = API_BASE + str(line) + "/operadores/"
-            #rows_to_delete = edited_df[edited_df["Eliminar"] == True]["Id"].tolist()
-            #delete_by_api(OPERATORS_API_DELETE, rows_to_delete)
+            OPERATORS_API_UPDATE = API_BASE + str(line) + "/operadores/"
+            changed_rows = edited_df[edited_df["activo"] != st.session_state.df_operadores["activo"]]
+            ids_operadores = changed_rows["Id"].tolist()
+            actives_operadores = changed_rows["activo"].tolist()
+            update_active(OPERATORS_API_UPDATE, ids_operadores, actives_operadores)
         
     
     with col2:
@@ -456,16 +630,18 @@ def show_tables(line):
                 unsafe_allow_html=True
             )
         with subcol2:
-            if st.button("🔄", help="Eliminar Paquetes Seleccionados"):
+            if st.button("🔄", help="Refrescar Paquetes Seleccionados"):
                 flag_delete_paquetes = True
             
         #st.session_state.df_paquetes['Eliminar'] = False
         edited_df_paquetes = st.data_editor(st.session_state.df_paquetes, hide_index=True, use_container_width=True, height=HEIGHT_TABLE, disabled=["Id", "Orden de Costura", "Número de Prendas"])
 
         if flag_delete_paquetes:
-            PAQUETES_API_DELETE = API_BASE + str(line) + "/paquetes/"
-            #rows_to_delete_paquetes = edited_df_paquetes[edited_df_paquetes["Eliminar"] == True]["Id"].tolist()
-            #delete_by_api(PAQUETES_API_DELETE, rows_to_delete_paquetes)
+            PAQUETES_API_UPDATE = API_BASE + str(line) + "/paquetes/"
+            changed_rows_paquetes = edited_df_paquetes[edited_df_paquetes["activo"] != st.session_state.df_paquetes["activo"]]
+            ids_paquetes = changed_rows_paquetes["Id"].tolist()
+            actives_paquetes = changed_rows_paquetes["activo"].tolist()
+            update_active(PAQUETES_API_UPDATE, ids_paquetes, actives_paquetes)
 
     with col3:
         st.markdown(
@@ -480,14 +656,20 @@ def show_tables(line):
 
     col1, col2, col3 = st.columns([4, 4, 3])
     with col1:
-        st.markdown(
-            """
-            <h3 style='text-align: center;'>
-                Específicas
-            </h3>
-            """,
-            unsafe_allow_html=True
-        )
+        subcol1, subcol2 = st.columns([5, 2])
+        with subcol1:
+            st.markdown(
+                """
+                <h3 style='text-align: center;'>
+                    Específicas
+                </h3>
+                """,
+                unsafe_allow_html=True
+            )
+            
+        with subcol2:
+            if st.button("✏️ Cambiar", help="Cambiar Específica"):
+                change_especifica(line)
         st.dataframe(st.session_state.df_especificas, hide_index=True, use_container_width=True, height=HEIGHT_TABLE)
 
     with col2:
@@ -511,12 +693,24 @@ def show_tables(line):
                 flag_delete_operador_especifica = True
             
         #st.session_state.df_operador_especifica['Eliminar'] = False
-        edited_df_operador_especifica = st.data_editor(st.session_state.df_operador_especifica, hide_index=True, use_container_width=True, height=HEIGHT_TABLE, disabled=["Id", "Orden de Costura", "Número de Prendas"])
+        edited_df_operador_especifica = st.data_editor(st.session_state.df_operador_especifica, hide_index=True, use_container_width=True, height=HEIGHT_TABLE, disabled=["Operador", "Específica"])
 
         if flag_delete_operador_especifica:
-            operador_especifica_API_DELETE = API_BASE + str(line) + "/operador_especifica/"
-            #rows_to_delete_operador_especifica = edited_df_operador_especifica[edited_df_operador_especifica["Eliminar"] == True]
-            #delete_by_api_operator_especifica(operador_especifica_API_DELETE, rows_to_delete_operador_especifica)
+            OPERADOR_ESPECIFICA_API_UPDATE = API_BASE + str(line) + "/operador_especifica/"
+            eficiencia_changed_rows = edited_df_operador_especifica[
+                edited_df_operador_especifica["Eficiencia"] != st.session_state.df_operador_especifica["Eficiencia"]
+            ]
+
+            changed_rows_operador_especifica = edited_df_operador_especifica[
+                (edited_df_operador_especifica["activo"] != st.session_state.df_operador_especifica["activo"]) |
+                (edited_df_operador_especifica["Eficiencia"] != st.session_state.df_operador_especifica["Eficiencia"])
+            ]
+            ids_operador= changed_rows_operador_especifica["Operador"].tolist()
+            ids_especificas = changed_rows_operador_especifica["Específica"].tolist()
+            eficiencia= changed_rows_operador_especifica["Eficiencia"].tolist()
+            actives_operador_especifica = changed_rows_operador_especifica["activo"].tolist()
+            update_active_op_esp(OPERADOR_ESPECIFICA_API_UPDATE, ids_operador, ids_especificas, eficiencia, actives_operador_especifica)
+            #write_history("Operador-Específica", eficiencia_changed_rows)
 
     with col3:
         subcol1, subcol2 = st.columns([6, 1])
@@ -531,16 +725,18 @@ def show_tables(line):
                 unsafe_allow_html=True
             )
         with subcol2:
-            if st.button("🔄", help="Eliminar Estilos de Cliente Seleccionados"):
+            if st.button("🔄", help="Refrescar Estilos de Cliente Seleccionados"):
                 flag_delete_estilos_cliente = True
             
         #st.session_state.df_estilos_cliente['Eliminar'] = False
         edited_df_estilos_cliente = st.data_editor(st.session_state.df_estilos_cliente, hide_index=True, use_container_width=True, height=HEIGHT_TABLE, disabled=["Id", "Orden de Costura", "Número de Prendas"])
 
         if flag_delete_estilos_cliente:
-            estilos_cliente_API_DELETE = API_BASE + str(line) + "/estilos_cliente/"
-            #rows_to_delete_estilos_cliente = edited_df_estilos_cliente[edited_df_estilos_cliente["Eliminar"] == True]["Id"].tolist()
-            #delete_by_api(estilos_cliente_API_DELETE, rows_to_delete_estilos_cliente)
+            ESTILOS_CLIENTE_API_UPDATE = API_BASE + str(line) + "/estilos_cliente/"
+            changed_rows_estilos_cliente = edited_df_estilos_cliente[edited_df_estilos_cliente["activo"] != st.session_state.df_estilos_cliente["activo"]]
+            ids_estilos_cliente = changed_rows_estilos_cliente["Id"].tolist()
+            actives_estilos_cliente = changed_rows_estilos_cliente["activo"].tolist()
+            update_active(ESTILOS_CLIENTE_API_UPDATE, ids_estilos_cliente, actives_estilos_cliente)
 
     # with col3:
     #     st.markdown(
@@ -557,7 +753,7 @@ def make_history():
     st.markdown(
         """
         <h2 style='text-align: center;'>
-            Historial de Cambio de Específicas
+            Historial De Cambios
         </h2>
         """,
         unsafe_allow_html=True
@@ -595,7 +791,7 @@ if st.session_state.main == False:
 
     # --- Contenido principal ---
     st.title("Visualización de parámetros")
-    especifica_buttons()
+    especifica_buttons(st.session_state.line)
     
     show_tables(st.session_state.line)
     
